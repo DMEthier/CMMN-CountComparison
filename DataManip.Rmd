@@ -1,0 +1,103 @@
+---
+title: "DataManip"
+author: "Danielle Ethier"
+date: "18/12/2020"
+output: html_document
+---
+
+This code was written to facilitate CMMN trend comparision using variour response variables: DET, Band, Census, Band+Census. The raw output used for this analysis can be found in the `data` folder. 
+
+
+```{r load packages, include=FALSE, echo=FALSE}
+
+library(tidyverse)
+library(reshape)
+library(ggplot2)
+
+```
+
+Now we will bulk import the data 
+
+```{r import trend data, include=FALSE, echo=FALSE}
+
+require(plyr)
+
+mydir<-"data/"
+my.files<-list.files(path = mydir, patter ="*det.Trends.2018.csv", full.name=TRUE)
+DETtrend<-ldply(my.files, read.csv)
+DETtrend$Response<-"DET"
+
+my.files<-list.files(path = mydir, patter ="*band.Trends.2018.csv", full.name=TRUE)
+Bandtrend<-ldply(my.files, read.csv)
+Bandtrend$Response<-"Band"
+
+my.files<-list.files(path = mydir, patter ="*census.Trends.2018.csv", full.name=TRUE)
+Censustrend<-ldply(my.files, read.csv)
+Censustrend$Response<-"Census"
+
+my.files<-list.files(path = mydir, patter ="*bc.Trends.2018.csv", full.name=TRUE)
+BCtrend<-ldply(my.files, read.csv)
+BCtrend$Response<-"BandCensus"
+
+BBStrend<-read.csv(paste0(mydir, "BBStrends.csv"))
+BBStrend$Response<-"BBS"
+
+detach(package:plyr) #detach or this will cause an issue with dplyr
+
+```
+
+```{r compile, include=FALSE, echo=FALSE}
+
+#combine cmmn output
+cmmntrend<-rbind(Bandtrend, BCtrend, Censustrend, DETtrend)
+
+#select desired columns
+cmmntrend<-cmmntrend %>% select(SpeciesCode, english_name, trnd, lower_ci, upper_ci, post_prob, period, years, season, analysis_code, site, Response)
+
+#set filters
+cmmntrend<- cmmntrend %>% filter(period=="all years") %>%  filter(analysis_code=="M") %>% droplevels()
+
+#remove NAs
+#cmmntrend<-na.omit(cmmntrend)
+
+```
+
+```{r plot, include=FALSE, echo=FALSE}
+site.list<-unique(cmmntrend$site)
+
+#create a site specific loop 
+for(m in 1:length(site.list)) {
+  
+#m<-1 #for testing
+    
+  site.data <-NULL 
+  site.data <- filter(cmmntrend, site == site.list[m]) %>%
+      droplevels()
+  
+site<-unique(site.data$site) 
+
+#recast the dataframe
+
+site.data<-cast(site.data, SpeciesCode+season~Response, value="trnd")
+
+p1<-ggplot(data=site.data, aes(DET, BandCensus, colour=season))+
+  geom_point(show.legend = FALSE)+
+  theme_classic()+
+  xlab("")
+p2<-ggplot(data=site.data, aes(DET, Census, colour=season))+
+  geom_point(show.legend = FALSE)+
+  theme_classic()+
+  xlab("")
+p3<-ggplot(data=site.data, aes(DET, Band, colour=season))+
+  geom_point()+
+  theme_classic()+
+  theme(legend.position="bottom")
+  
+pdf(paste(site, "compare.plots.pdf"))
+multiplot(p1, p2, p3) 
+while(!is.null(dev.list())) dev.off()
+  
+} #end site specific loop
+
+```
+
