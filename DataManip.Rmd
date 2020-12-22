@@ -13,6 +13,10 @@ This code was written to facilitate CMMN trend comparision using variour respons
 library(tidyverse)
 library(reshape)
 library(ggplot2)
+library(lmodel2) #Reduced major axis regression
+
+#custom function to plot multiple plots per page
+source("./multiplotfunction.R")
 
 ```
 
@@ -81,10 +85,9 @@ cmmntrend<-cmmntrend %>% select(SpeciesCode, english_name, trnd, lower_ci, upper
 cmmnindex<-cmmnindex %>% select(SpeciesCode, english_name, index, lower_ci, upper_ci, period, year, season, analysis_code, site, Response)
 
 #set filters
-cmmntrend<- cmmntrend %>% filter(period=="all years") %>%  filter(analysis_code=="M") %>% droplevels()
+cmmntrend<- cmmntrend %>% filter(years=="2008-2018") %>%  filter(analysis_code=="M") %>% droplevels()
 
-cmmnindex<- cmmnindex %>% filter(period=="all years") %>%  filter(analysis_code=="M") %>% droplevels()
-
+cmmnindex<- cmmnindex %>% filter(year>=2008) %>%  filter(analysis_code=="M") %>% droplevels()
 
 #remove NAs
 #cmmntrend<-na.omit(cmmntrend)
@@ -128,6 +131,26 @@ while(!is.null(dev.list())) dev.off()
   
 } #end site specific loop
 
+trend.summary<-cast(cmmntrend, SpeciesCode+season+site~Response, value="trnd")
+trend.summary<-trend.summary %>% drop_na("DET")
+
+p1<-ggplot(data=trend.summary, aes(DET, BandCensus, colour=season))+
+  geom_point(show.legend = FALSE)+
+  theme_classic()+
+  xlab("")
+p2<-ggplot(data=trend.summary, aes(DET, Census, colour=season))+
+  geom_point(show.legend = FALSE)+
+  theme_classic()+
+  xlab("")
+p3<-ggplot(data=trend.summary, aes(DET, Band, colour=season))+
+  geom_point()+
+  theme_classic()+
+  theme(legend.position="bottom")
+
+pdf(paste("full.trend.compare.plots.pdf"))
+multiplot(p1, p2, p3) 
+while(!is.null(dev.list())) dev.off()
+  
 ```
 
 ```{r plotindex, include=FALSE, echo=FALSE}
@@ -166,6 +189,54 @@ multiplot(p1, p2, p3)
 while(!is.null(dev.list())) dev.off()
   
 } #end site specific loop
+
+```
+
+Will use a reduced major axis regression
+
+```{trend regression include=FALSE, echo=FALSE}
+
+mod1<-lmodel2(DET~Band,data=trend.summary,"interval","interval",99)
+mod2<-lmodel2(DET~Census,data=trend.summary,"interval","interval",99)
+mod3<-lmodel2(DET~BandCensus,data=trend.summary,"interval","interval",99)
+mod4<-lmodel2(Census~Band,data=trend.summary,"interval","interval",99)
+
+#mod1$regression.results #to print results
+
+# wanted results from the RMA model
+INT <- mod1$regression.results[[2]][4]
+SLOPE <- mod1$regression.results[[3]][4]
+PVAL <- mod1$P.param
+RSQ <- mod1$rsquare
+Model<-"DET vs. Band"
+DET.band = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
+
+INT <- mod2$regression.results[[2]][4]
+SLOPE <- mod2$regression.results[[3]][4]
+PVAL <- mod2$P.param
+RSQ <- mod2$rsquare
+Model<-"DET vs. Census"
+DET.census = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
+
+INT <- mod3$regression.results[[2]][4]
+SLOPE <- mod3$regression.results[[3]][4]
+PVAL <- mod3$P.param
+RSQ <- mod3$rsquare
+Model<-"DET vs. Band+Census"
+DET.bandcensus = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
+
+INT <- mod4$regression.results[[2]][4]
+SLOPE <- mod4$regression.results[[3]][4]
+PVAL <- mod4$P.param
+RSQ <- mod4$rsquare
+Model<-"Band vs. Census"
+band.census = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
+
+trend.regression<-rbind(DET.band, DET.census, DET.bandcensus, band.census)
+trend.regression$INT<-as.numeric(trend.regression$INT, round=3)
+trend.regression$SLOPE<-as.numeric(trend.regression$SLOPE, round=3)
+trend.regression$PVAL<-as.numeric(trend.regression$PVAL, round=3)
+trend.regression$RSQ<-as.numeric(trend.regression$RSQ, round=3)
 
 ```
 
