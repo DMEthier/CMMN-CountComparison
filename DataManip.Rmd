@@ -14,9 +14,12 @@ library(tidyverse)
 library(reshape)
 library(ggplot2)
 library(lmodel2) #Reduced major axis regression
+library(INLA)
 
 #custom function to plot multiple plots per page
 source("./multiplotfunction.R")
+
+out.dir<- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison/output/")
 
 ```
 
@@ -30,6 +33,7 @@ mydir<-"data/"
 my.files<-list.files(path = mydir, patter ="*det.Trends.2018.csv", full.name=TRUE)
 DETtrend<-ldply(my.files, read.csv)
 DETtrend$Response<-"DET"
+DETtrend<-DETtrend %>% select(-X)
 
 my.files<-list.files(path = mydir, patter ="*band.Trends.2018.csv", full.name=TRUE)
 Bandtrend<-ldply(my.files, read.csv)
@@ -58,6 +62,7 @@ mydir<-"data/"
 my.files<-list.files(path = mydir, patter ="*det.AnnualIndices.2018.csv", full.name=TRUE)
 DETindex<-ldply(my.files, read.csv)
 DETindex$Response<-"DET"
+DETindex<-DETindex %>% select(-X)
 
 my.files<-list.files(path = mydir, patter ="*band.AnnualIndices.2018.csv", full.name=TRUE)
 Bandindex<-ldply(my.files, read.csv)
@@ -82,162 +87,77 @@ cmmnindex<-rbind(Bandindex, BCindex, Censusindex, DETindex)
 #select desired columns
 cmmntrend<-cmmntrend %>% select(SpeciesCode, english_name, trnd, lower_ci, upper_ci, post_prob, period, years, season, analysis_code, site, Response)
 
-cmmnindex<-cmmnindex %>% select(SpeciesCode, english_name, index, lower_ci, upper_ci, period, year, season, analysis_code, site, Response)
+cmmnindex<-cmmnindex %>% select(SpeciesCode, english_name, scientific_name, index, lower_ci, upper_ci, kld, period, year, season, analysis_code, site, Response)
 
 #set filters
-cmmntrend<- cmmntrend %>% filter(years=="2008-2018") %>%  filter(analysis_code=="M") %>% droplevels()
+cmmntrend<- cmmntrend %>% filter(years=="2008-2018") %>%  #filter(analysis_code=="M") %>% 
+  droplevels()
 
-cmmnindex<- cmmnindex %>% filter(year>=2008) %>%  filter(analysis_code=="M") %>% droplevels()
+write.csv(cmmntrend, "trend_dat.csv")
+
+cmmnindex<- cmmnindex %>% filter(year>=2008) %>%  #filter(analysis_code=="M") %>% 
+  droplevels()
+
+write.csv(cmmnindex, "index_dat.csv")
 
 #remove NAs
 #cmmntrend<-na.omit(cmmntrend)
 
 ```
 
-```{r plottrends, include=FALSE, echo=FALSE}
-site.list<-unique(cmmntrend$site)
+#Create summary of speices monitored by each count method using trend output, analysis code considered
 
-#create a site specific loop 
-for(m in 1:length(site.list)) {
-  
-#m<-1 #for testing
-    
-  site.data <-NULL 
-  site.data <- filter(cmmntrend, site == site.list[m]) %>%
-      droplevels()
-  
-site<-unique(site.data$site) 
 
-#recast the dataframe
+```{r sumstats anal code, include=FALSE, echo=FALSE}
 
-site.data<-cast(site.data, SpeciesCode+season~Response, value="trnd")
+trendf<-cmmntrend %>% filter(season=="Fall")
+indexf<-cmmnindex %>% filter(season=="Fall")
 
-p1<-ggplot(data=site.data, aes(DET, BandCensus, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p2<-ggplot(data=site.data, aes(DET, Census, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p3<-ggplot(data=site.data, aes(DET, Band, colour=season))+
-  geom_point()+
-  theme_classic()+
-  theme(legend.position="bottom")
-  
-pdf(paste(site, "trend.compare.plots.pdf"))
-multiplot(p1, p2, p3) 
-while(!is.null(dev.list())) dev.off()
-  
-} #end site specific loop
+fall.data<-cast(trendf, SpeciesCode+analysis_code+site~Response, value="trnd", fun.aggregate = length)
+write.csv(fall.data, "falltrend.datasummary.csv")
 
-trend.summary<-cast(cmmntrend, SpeciesCode+season+site~Response, value="trnd")
-trend.summary<-trend.summary %>% drop_na("DET")
+trends<-cmmntrend %>% filter(season=="Spring")
+indexs<-cmmnindex %>% filter(season=="Spring")
 
-p1<-ggplot(data=trend.summary, aes(DET, BandCensus, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p2<-ggplot(data=trend.summary, aes(DET, Census, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p3<-ggplot(data=trend.summary, aes(DET, Band, colour=season))+
-  geom_point()+
-  theme_classic()+
-  theme(legend.position="bottom")
+spring.data<-cast(trends, SpeciesCode+analysis_code+site~Response, value="trnd", fun.aggregate = length)
+write.csv(spring.data, "springtrend.datasummary.csv")
 
-pdf(paste("full.trend.compare.plots.pdf"))
-multiplot(p1, p2, p3) 
-while(!is.null(dev.list())) dev.off()
-  
-```
-
-```{r plotindex, include=FALSE, echo=FALSE}
-site.list<-unique(cmmnindex$site)
-
-#create a site specific loop 
-for(m in 1:length(site.list)) {
-  
-#m<-1 #for testing
-    
-  site.data <-NULL 
-  site.data <- filter(cmmnindex, site == site.list[m]) %>%
-      droplevels()
-  
-site<-unique(site.data$site) 
-
-#recast the dataframe
-
-site.data<-cast(site.data, SpeciesCode+season+year~Response, value="index")
-
-p1<-ggplot(data=site.data, aes(DET, BandCensus, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p2<-ggplot(data=site.data, aes(DET, Census, colour=season))+
-  geom_point(show.legend = FALSE)+
-  theme_classic()+
-  xlab("")
-p3<-ggplot(data=site.data, aes(DET, Band, colour=season))+
-  geom_point()+
-  theme_classic()+
-  theme(legend.position="bottom")
-  
-pdf(paste(site, "index.compare.plots.pdf"))
-multiplot(p1, p2, p3) 
-while(!is.null(dev.list())) dev.off()
-  
-} #end site specific loop
+full.data<-cast(cmmntrend, SpeciesCode+analysis_code+site+season~Response, value="trnd")
+write.csv(full.data, "fulltrend.datasummary.csv")
 
 ```
 
-Will use a reduced major axis regression
+#Table 1: Number of speices with computed trends using each response variable  
 
-```{trend regression include=FALSE, echo=FALSE}
+```{r T1 sumstats, include=FALSE, echo=FALSE}
 
-mod1<-lmodel2(DET~Band,data=trend.summary,"interval","interval",99)
-mod2<-lmodel2(DET~Census,data=trend.summary,"interval","interval",99)
-mod3<-lmodel2(DET~BandCensus,data=trend.summary,"interval","interval",99)
-mod4<-lmodel2(Census~Band,data=trend.summary,"interval","interval",99)
 
-#mod1$regression.results #to print results
+fall.data<-cast(trendf, site~Response, value="trnd", fun.aggregate = length)
+write.csv(fall.data, "Table1Fall.csv")
 
-# wanted results from the RMA model
-INT <- mod1$regression.results[[2]][4]
-SLOPE <- mod1$regression.results[[3]][4]
-PVAL <- mod1$P.param
-RSQ <- mod1$rsquare
-Model<-"DET vs. Band"
-DET.band = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
 
-INT <- mod2$regression.results[[2]][4]
-SLOPE <- mod2$regression.results[[3]][4]
-PVAL <- mod2$P.param
-RSQ <- mod2$rsquare
-Model<-"DET vs. Census"
-DET.census = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
+spring.data<-cast(trends, site~Response, value="trnd", fun.aggregate = length)
+write.csv(spring.data, "Table1Spring.csv")
 
-INT <- mod3$regression.results[[2]][4]
-SLOPE <- mod3$regression.results[[3]][4]
-PVAL <- mod3$P.param
-RSQ <- mod3$rsquare
-Model<-"DET vs. Band+Census"
-DET.bandcensus = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
-
-INT <- mod4$regression.results[[2]][4]
-SLOPE <- mod4$regression.results[[3]][4]
-PVAL <- mod4$P.param
-RSQ <- mod4$rsquare
-Model<-"Band vs. Census"
-band.census = data.frame(cbind(Model, INT, SLOPE, PVAL, RSQ))
-
-trend.regression<-rbind(DET.band, DET.census, DET.bandcensus, band.census)
-trend.regression$INT<-as.numeric(trend.regression$INT, round=3)
-trend.regression$SLOPE<-as.numeric(trend.regression$SLOPE, round=3)
-trend.regression$PVAL<-as.numeric(trend.regression$PVAL, round=3)
-trend.regression$RSQ<-as.numeric(trend.regression$RSQ, round=3)
+full.data<-cast(cmmntrend, site+season~Response, value="trnd")
+write.csv(full.data, "Table1All.csv")
 
 ```
 
 
+#Table 2: Number of speices of various migration types with computed trends using each response variable
+
+```{r T2 sumstats, include=FALSE, echo=FALSE}
+
+
+fall.data<-cast(trendf, analysis_code~Response, value="trnd", fun.aggregate = length)
+write.csv(fall.data, "Table2Fall.csv")
+
+
+spring.data<-cast(trends, analysis_code~Response, value="trnd", fun.aggregate = length)
+write.csv(spring.data, "Table2Spring.csv")
+
+full.data<-cast(cmmntrend, analysis_code+season~Response, value="trnd", fun.aggregate = length)
+write.csv(full.data, "Table2All.csv")
+
+```

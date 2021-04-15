@@ -1,0 +1,271 @@
+---
+title: "Analysis"
+author: "Danielle Ethier"
+date: "25/01/2021"
+output: html_document
+---
+
+Following methods from Dunn et al. 2004
+
+##Table 1
+To determine whether banding and census had independing effects of DET we preform a multiple regression. 
+DET annual index as response, and the census and banding index as the depenend variables
+This will be done for each station/seaon seperatley only uing the past 10-years of data
+
+```{r index regression}
+
+out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison/output/")
+
+#create a table for results
+indexcomp.txt <- as.data.frame(matrix(data = NA, nrow = 1, ncol = 9, byrow = FALSE, dimnames = NULL))
+
+names(indexcomp.txt) <- c("SpeciesCode", "english_name", "scientific_name", "analysis_code", "Band-Census corr", "DET-Band+Census corr", "Census", "Banding", "R2") 
+
+#Import desired inde data
+index_dat<-read.csv("index_dat.csv")
+index_dat<-index_dat %>% filter(kld<=5) #remove unreliable index values (i.e., outliers)
+
+#Import sort oder 
+sort<-read.csv("sp.names.csv")
+sort<-sort %>% select(species_code, sort_order)
+index_dat<-merge(index_dat, sort, by.x="SpeciesCode", by.y="species_code")
+
+#Visual data check for outliers
+#plot(index_dat$year, index_dat$index)
+
+site.list<-unique(index_dat$site)
+season.list<-unique(index_dat$season)
+species.list<-unique(index_dat$SpeciesCode)
+
+#Create a site specific loop 
+for(m in 1:length(site.list)) {
+  
+m<-1 #for testing
+    
+  site.data <-NULL 
+  site.data <- filter(index_dat, site == site.list[m]) %>%
+      droplevels()
+  
+
+#Create a season specific loop 
+for(l in 1:length(season.list)) {
+  
+l<-1 #for testing
+    
+  season.data <-NULL 
+  season.data <- filter(site.data, season == season.list[l]) %>%
+      droplevels()
+  
+#Create a species specific loop 
+for(p in 1:length(species.list)) {
+  
+p<-1 #for testing
+    
+  sp.data <-NULL 
+  sp.data <- filter(season.data, SpeciesCode == species.list[p]) %>%
+      droplevels()
+  
+#Create the site, season, species specific data frame for the analysis
+dat<-cast(sp.data, SpeciesCode+english_name+scientific_name+sort_order+year~Response, value="index")
+  
+#correlation between Banding & Census
+cor1<-cor.test(dat$Band, dat$Census, data=dat)  
+  
+#correlation between DET & CensusBand  
+cor2<-cor.test(dat$DET, dat$BandCensus, data=dat)    
+  
+#multiple regression between DET~Census+Band  
+lm<-lm(DET~Band+Census, data=dat)
+summary(lm)$r.squared
+
+index.out <- NULL
+index.out <- as.data.frame(matrix(indexcomp.txt))
+
+
+write.table(indexcomp.txt, file = paste(out.dir, site.list[m], ".", season.list[l], ".Annual Index Comparision.csv", sep = ""), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
+  
+
+
+} # end species loop
+  } # end season loop
+    } # end site loop
+
+```
+
+
+
+##Table 3
+Reduced major axis regression 
+
+Compare trends from pairs of count methods within stations.
+An intercept >0 indicates a tendacy to a positive bias in the first count method in each pair. If slope is < 1 it indicaes that the positive bias was less in speices with increasing trends, ect. 
+
+
+```{r trend regression include=FALSE, echo=FALSE}
+
+#Import desired data summary
+trend<-read.csv("fulltrend.datasummary.csv")
+
+#create output table
+trend.regression.txt <- as.data.frame(matrix(data = NA, nrow = 1, ncol = 11, 	byrow = FALSE, dimnames = NULL))
+
+names(trend.regression.txt) <-  c("Model", "Site", "Season", "INT", "INT_LCI", "INT_UCI", "SLOPE", "SLOPE_LCI", "SLOPE_UCI", "PVAL", "RSQ") 
+
+write.table(trend.regression.txt, file = paste(out.dir, "trend.regression.csv", sep = ""), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
+
+#list for loops
+season.list<-unique(trend$season)
+station.list<-unique(trend$site)
+
+#loop through site and season to generate output 
+
+  for (m in 1:length(season.list)){
+  
+    #m<-1 #for testing
+
+season.data<-NULL # clear previous  
+season.data <- filter(trend, season == season.list[m]) %>% droplevels()
+  
+  for (n in 1:length(station.list)){
+  
+    #n<-1 #for testing 
+    
+ss.data <-NULL # clear previous    
+ss.data <- filter(season.data, site == station.list[n]) %>% droplevels() 
+
+mod1<-lmodel2(DET~Band,data=ss.data,"interval","interval",99)
+mod2<-lmodel2(DET~Census,data=ss.data,"interval","interval",99)
+mod3<-lmodel2(DET~BandCensus,data=ss.data,"interval","interval",99)
+mod4<-lmodel2(Census~Band,data=ss.data,"interval","interval",99)
+
+#mod1$regression.results #to print results
+
+# wanted results from the RMA model
+INT <- mod1$regression.results[[2]][4]
+INT_LCI <- mod1$confidence.intervals[[2]][4]
+INT_UCI <- mod1$confidence.intervals[[3]][4]
+SLOPE <- mod1$regression.results[[3]][4]
+SLOPE_LCI <- mod1$confidence.intervals[[4]][4]
+SLOPE_UCI <- mod1$confidence.intervals[[5]][4]
+PVAL <- mod1$P.param
+RSQ <- mod1$rsquare
+Model<-"DET vs. Band"
+Site<-station.list[n]
+Season<-season.list[m]
+DET.band<-NULL
+DET.band = data.frame(cbind(Model, Site, Season,  INT, INT_LCI, INT_UCI, SLOPE, SLOPE_LCI, SLOPE_UCI, PVAL, RSQ))
+
+INT <- mod2$regression.results[[2]][4]
+INT_LCI <- mod2$confidence.intervals[[2]][4]
+INT_UCI <- mod2$confidence.intervals[[3]][4]
+SLOPE <- mod2$regression.results[[3]][4]
+SLOPE_LCI <- mod2$confidence.intervals[[4]][4]
+SLOPE_UCI <- mod2$confidence.intervals[[5]][4]
+PVAL <- mod2$P.param
+RSQ <- mod2$rsquare
+Model<-"DET vs. Census"
+Site<-station.list[n]
+Season<-season.list[m]
+DET.census<-NULL
+DET.census = data.frame(cbind(Model, Site, Season, INT, INT_LCI, INT_UCI, SLOPE, SLOPE_LCI, SLOPE_UCI, PVAL, RSQ))
+
+INT <- mod3$regression.results[[2]][4]
+INT_LCI <- mod3$confidence.intervals[[2]][4]
+INT_UCI <- mod3$confidence.intervals[[3]][4]
+SLOPE <- mod3$regression.results[[3]][4]
+SLOPE_LCI <- mod3$confidence.intervals[[4]][4]
+SLOPE_UCI <- mod3$confidence.intervals[[5]][4]
+PVAL <- mod3$P.param
+RSQ <- mod3$rsquare
+Model<-"DET vs. Band+Census"
+Site<-station.list[n]
+Season<-season.list[m]
+DET.bandcensus<-NULL
+DET.bandcensus = data.frame(cbind(Model, Site, Season, INT, INT_LCI, INT_UCI, SLOPE, SLOPE_LCI, SLOPE_UCI, PVAL, RSQ))
+
+INT <- mod4$regression.results[[2]][4]
+INT_LCI <- mod4$confidence.intervals[[2]][4]
+INT_UCI <- mod4$confidence.intervals[[3]][4]
+SLOPE <- mod4$regression.results[[3]][4]
+SLOPE_LCI <- mod4$confidence.intervals[[4]][4]
+SLOPE_UCI <- mod4$confidence.intervals[[5]][4]
+PVAL <- mod4$P.param
+RSQ <- mod4$rsquare
+Model<-"Band vs. Census"
+Site<-station.list[n]
+Season<-season.list[m]
+band.census<-NULL
+band.census = data.frame(cbind(Model, Site, Season, INT, INT_LCI, INT_UCI, SLOPE, SLOPE_LCI, SLOPE_UCI, PVAL, RSQ))
+
+trend.regression<-NULL
+trend.regression<-rbind(DET.band, DET.census, DET.bandcensus, band.census)
+trend.regression$INT<-as.numeric(trend.regression$INT, round=3)
+trend.regression$INT_LCI<-as.numeric(trend.regression$INT_LCI, round=3)
+trend.regression$INT_UCI<-as.numeric(trend.regression$INT_UCI, round=3)
+trend.regression$SLOPE<-as.numeric(trend.regression$SLOPE, round=3)
+trend.regression$SLOPE_LCI<-as.numeric(trend.regression$SLOPE_LCI, round=3)
+trend.regression$SLOPE_UCI<-as.numeric(trend.regression$SLOPE_UCI, round=3)
+trend.regression$PVAL<-as.numeric(trend.regression$PVAL, round=3)
+trend.regression$RSQ<-as.numeric(trend.regression$RSQ, round=3)
+
+#print result to tables
+write.table(trend.regression, file = paste(out.dir, "trend.regression.csv", sep = ""), row.names = FALSE, append = TRUE, quote = FALSE, sep = ",", col.names = FALSE)
+	
+  
+} #end season loop
+ } #end site loop
+
+```
+
+
+
+##NOT USED##
+
+Does analysis_code or season influence whether of not we get banding, census or band+census trend output? 
+Try a bernoulli/binomail glm on the output of the trend model. 0 = no trend 1 = trend 
+
+```{r summary stats, include=FALSA, echo=FALSE}
+
+detach(package:plyr)
+
+fall.data <-read.csv("falltrend.datasummary.csv")
+fall.data$season<-"Fall"
+spring.data <-read.csv("springtrend.datasummary.csv")
+spring.data$season<-"Spring"
+
+fall.sumstat<-fall.data %>% group_by(site) %>% summarise(Tot.Species=sum(DET), Num.Band=sum(Band), Num.Census=sum(Census), Num.BC=sum(BandCensus))
+
+spring.sumstat<-spring.data %>% group_by(site) %>% summarise(Tot.Species=sum(DET), Num.Band=sum(Band), Num.Census=sum(Census), Num.BC=sum(BandCensus))
+
+fall.migstat<-fall.data %>% group_by(analysis_code) %>% summarise(Tot.Species=sum(DET), Num.Band=sum(Band), Num.Census=sum(Census), Num.BC=sum(BandCensus))
+
+spring.migstat<-spring.data %>% group_by(analysis_code) %>% summarise(Tot.Species=sum(DET), Num.Band=sum(Band), Num.Census=sum(Census), Num.BC=sum(BandCensus))
+
+```
+
+```{r binomialcompare regression include=FALSE, echo=FALSE}
+
+fall.data$SpeciesCode<-as.factor(fall.data$SpeciesCode)
+fall.data$site<-as.factor(fall.data$site)
+fall.data$analysis_code<-as.factor(fall.data$analysis_code)
+fall.data$season<-as.factor(fall.data$season)
+
+modBand<-inla(Band ~ analysis_code + f(SpeciesCode, model="iid") + f(site, model="iid"), family="binomial", data=fall.data, verbose = TRUE)
+summary(modBand)
+
+
+
+#using fall and spring combined
+trend.data<-rbind(fall.data, spring.data)
+
+trend.data$SpeciesCode<-as.factor(trend.data$SpeciesCode)
+trend.data$site<-as.factor(trend.data$site)
+trend.data$analysis_code<-as.factor(trend.data$analysis_code)
+trend.data$season<-as.factor(trend.data$season)
+
+modBand<-inla(Band ~ analysis_code + season + f(SpeciesCode, model="iid") + f(site, model="iid"), family="binomial", data=trend.data, verbose = TRUE)
+summary(modBand)
+
+```
+
+

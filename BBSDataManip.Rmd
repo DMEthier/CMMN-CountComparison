@@ -1,0 +1,39 @@
+---
+title: "BBSDataManip"
+author: "Danielle Ethier"
+date: "26/01/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+```
+
+## BBS Data Manipulation 
+
+At the time of writing, the BBS data were made available by Adam Smith with Environment and Climate Change Canada on Google drive: `https://drive.google.com/drive/folders/1OTqdql4oGTGqwDNWcEIHtpamrSifvp-f`. I have downloaded the 'All 2018 BBS Trend.csv' and saved it in the *data* folder as 'BBStrends.csv'. The following code selects and manipulates the BBS data for use in the count comparison analysis. 
+
+```{r BBSreaddata, include=FALSE, echo=FALSE}
+
+BBS<-read.csv(file="data/BBStrends.csv")
+
+```
+
+Select columns of interest
+
+```{r BBSselect, echo=FALSE}
+
+BBS<-BBS %>% select(Start_year, End_year, Region, Region_type, Strata_included, Trend, Percent_Change, Percent_Change_Q0.05, Percent_Change_Q0.95, Slope_Trend, Slope_Trend_Q0.05, Slope_Trend_Q0.95, Width_of_95_percent_Credible_Interval_Slope, Relative_Abundance, Reliability, species, bbs_num)
+
+```
+
+Filter rows of interest
+
+```{r BBSselect, echo=FALSE}
+
+BBS<-BBS %>% filter(Start_year>=2008 & End_year<=2018) %>% filter(Region_type %in% c("bcr", "prov_state"))
+
+```
+
