@@ -18,11 +18,11 @@ out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison
 
 #create a table for results
 
-indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 15, byrow = FALSE, dimnames = NULL))
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 17, byrow = FALSE, dimnames = NULL))
 
-names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2") 
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "BCsig", "BCR2") 
 
-write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
+write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision_June2021.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
 
 #Import desired inde data
 index_dat<-read.csv("index_dat.csv")
@@ -32,6 +32,13 @@ index_dat<-index_dat %>% filter(kld<=5) #remove unreliable index values (i.e., o
 sort<-read.csv("sp.names.csv")
 sort<-sort %>% select(species_code, sort_order)
 index_dat<-merge(index_dat, sort, by.x="SpeciesCode", by.y="species_code")
+
+#Import response variable files
+fallres<-read.csv("sp.site.trends.fall.csv")
+fallres$season<-"Spring"
+springres<-read.csv("sp.site.trends.spring.csv")
+springres$season<-"Fall"
+res<-rbind(fallres, springres)
 
 #Visual data check for outliers
 #plot(index_dat$year, index_dat$index)
@@ -66,7 +73,7 @@ species.list<-unique(season.data$SpeciesCode)
 #Create a species specific loop 
 for(p in 1:length(species.list)) {
 
-#p<-6 #for testing
+#p<-10 #for testing
     
   sp.data <-NULL 
   sp.data <- filter(season.data, SpeciesCode == species.list[p]) %>%
@@ -88,12 +95,24 @@ try(cor2<-cor.test(dat$DET, dat$BC, method="pearson"), silent=TRUE)
 lm<-NULL
 try(lm<-lm(DET~Band+Census, data=dat), silent=TRUE)
 
+#single regression between DET~Census  
+lm1<-NULL
+try(lm1<-lm(DET~Census, data=dat), silent=TRUE)
+
+#single regression between DET~Band
+lm2<-NULL
+try(lm2<-lm(DET~Band, data=dat), silent=TRUE)
+
+#single regression between DET~BC  
+lm3<-NULL
+try(lm3<-lm(DET~BC, data=dat), silent=TRUE)
+
 indexcomp<-NULL #clean old
 
 #create new
-indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 15, byrow = FALSE, dimnames = NULL))
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 17, byrow = FALSE, dimnames = NULL))
 
-names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2")
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "BCsig", "BCR2")
 
 indexcomp$site<-site.list[m]
 indexcomp$season<-season.list[l]
@@ -119,6 +138,7 @@ indexcomp$DETBCcor2<-cor2$estimate
 indexcomp$sig2<-cor2$p.value
 }
 
+#lm=DET~Band+Census
 if(is.null(lm)){
 indexcomp$Censussig<-"NA"
 indexcomp$Bandingsig<-"NA"
@@ -129,8 +149,36 @@ indexcomp$Bandingsig<-coef(summary(lm))[2,4]
 indexcomp$R2<-summary(lm)$r.squared
 }
 
+#lm2=DET~Band
+if(is.null(lm2)){
+indexcomp$Bandingsig<-"NA"
+indexcomp$R2<-"NA"
+}else{
+try(indexcomp$Bandingsig<-coef(summary(lm2))[2,4], silent=TRUE)
+try(indexcomp$R2<-summary(lm2)$r.squared, silent=TRUE)
+}
+
+#lm1 = DET~Census
+if(is.null(lm1)){
+indexcomp$Censussig<-"NA"
+indexcomp$R2<-"NA"
+}else{
+try(indexcomp$Censussig<-coef(summary(lm1))[2,4], silent=TRUE)
+try(indexcomp$R2<-summary(lm1)$r.squared, silent=TRUE)
+}
+
+
+#lm3=DET~BC
+if(is.null(lm3)){
+indexcomp$BCsig<-"NA"
+indexcomp$BCR2<-"NA"
+}else{
+try(indexcomp$BCsig<-coef(summary(lm3))[2,4], silent=TRUE)
+try(indexcomp$BCR2<-summary(lm3)$r.squared, silent=TRUE)
+}
+
 #Print final error table to file
-write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision_June2021.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
 
 
 } # end species loop
