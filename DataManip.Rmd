@@ -74,7 +74,7 @@ Censusindex$Response<-"Census"
 
 my.files<-list.files(path = mydir, patter ="*bc.AnnualIndices.2018.csv", full.name=TRUE)
 BCindex<-ldply(my.files, read.csv)
-BCindex$Response<-"BandCensus"
+BCindex$Response<-"BC"
 
 ```
 
@@ -114,13 +114,24 @@ trendf<-cmmntrend %>% filter(season=="Fall")
 indexf<-cmmnindex %>% filter(season=="Fall")
 
 fall.data<-cast(trendf, SpeciesCode+analysis_code+site~Response, value="trnd", fun.aggregate = length)
-write.csv(fall.data, "falltrend.datasummary.csv")
+
+write.csv(fall.data, "sp.site.trends.fall.csv ")
+
+fall.data2<-cast(trendf, analysis_code+site~Response, value="trnd", fun.aggregate = length)
+
+write.csv(fall.data2, "falltrend.datasummary.analycode.csv")
 
 trends<-cmmntrend %>% filter(season=="Spring")
 indexs<-cmmnindex %>% filter(season=="Spring")
 
 spring.data<-cast(trends, SpeciesCode+analysis_code+site~Response, value="trnd", fun.aggregate = length)
+
+write.csv(spring.data, "sp.site.trends.spring.csv ")
+
+spring.data2<-cast(trends, analysis_code+site~Response, value="trnd", fun.aggregate = length)
+
 write.csv(spring.data, "springtrend.datasummary.csv")
+write.csv(spring.data2, "springtrend.datasummary.analycode.csv")
 
 full.data<-cast(cmmntrend, SpeciesCode+analysis_code+site+season~Response, value="trnd")
 write.csv(full.data, "fulltrend.datasummary.csv")

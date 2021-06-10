@@ -17,9 +17,12 @@ This will be done for each station/seaon seperatley only uing the past 10-years 
 out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison/output/")
 
 #create a table for results
-indexcomp.txt <- as.data.frame(matrix(data = NA, nrow = 1, ncol = 9, byrow = FALSE, dimnames = NULL))
 
-names(indexcomp.txt) <- c("SpeciesCode", "english_name", "scientific_name", "analysis_code", "Band-Census corr", "DET-Band+Census corr", "Census", "Banding", "R2") 
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 15, byrow = FALSE, dimnames = NULL))
+
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2") 
+
+write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
 
 #Import desired inde data
 index_dat<-read.csv("index_dat.csv")
@@ -35,12 +38,13 @@ index_dat<-merge(index_dat, sort, by.x="SpeciesCode", by.y="species_code")
 
 site.list<-unique(index_dat$site)
 season.list<-unique(index_dat$season)
-species.list<-unique(index_dat$SpeciesCode)
+
+##LOOP THROUGH SITE, SEASON, SPECIES##
 
 #Create a site specific loop 
 for(m in 1:length(site.list)) {
   
-m<-1 #for testing
+#m<-1 #for testing
     
   site.data <-NULL 
   site.data <- filter(index_dat, site == site.list[m]) %>%
@@ -50,49 +54,126 @@ m<-1 #for testing
 #Create a season specific loop 
 for(l in 1:length(season.list)) {
   
-l<-1 #for testing
+#l<-1 #for testing
     
   season.data <-NULL 
   season.data <- filter(site.data, season == season.list[l]) %>%
       droplevels()
+
+#create specie list
+species.list<-unique(season.data$SpeciesCode)  
   
 #Create a species specific loop 
 for(p in 1:length(species.list)) {
-  
-p<-1 #for testing
+
+#p<-6 #for testing
     
   sp.data <-NULL 
   sp.data <- filter(season.data, SpeciesCode == species.list[p]) %>%
       droplevels()
   
 #Create the site, season, species specific data frame for the analysis
-dat<-cast(sp.data, SpeciesCode+english_name+scientific_name+sort_order+year~Response, value="index")
+dat<-NULL
+dat<-cast(sp.data,SpeciesCode+english_name+scientific_name+sort_order+analysis_code+year~Response, value="index")
   
 #correlation between Banding & Census
-cor1<-cor.test(dat$Band, dat$Census, data=dat)  
-  
+cor1<-NULL
+try(cor1<-cor.test(dat$Band, dat$Census, method="pearson"), silent=TRUE) 
+
 #correlation between DET & CensusBand  
-cor2<-cor.test(dat$DET, dat$BandCensus, data=dat)    
+cor2<-NULL
+try(cor2<-cor.test(dat$DET, dat$BC, method="pearson"), silent=TRUE)    
   
-#multiple regression between DET~Census+Band  
-lm<-lm(DET~Band+Census, data=dat)
-summary(lm)$r.squared
+#multiple regression between DET~Band+Census  
+lm<-NULL
+try(lm<-lm(DET~Band+Census, data=dat), silent=TRUE)
 
-index.out <- NULL
-index.out <- as.data.frame(matrix(indexcomp.txt))
+indexcomp<-NULL #clean old
 
+#create new
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 15, byrow = FALSE, dimnames = NULL))
 
-write.table(indexcomp.txt, file = paste(out.dir, site.list[m], ".", season.list[l], ".Annual Index Comparision.csv", sep = ""), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
-  
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2")
+
+indexcomp$site<-site.list[m]
+indexcomp$season<-season.list[l]
+indexcomp$SpeciesCode<-dat$SpeciesCode[1]
+indexcomp$english_name<- dat$english_name[1]
+indexcomp$scientific_name<-dat$scientific_name[1]
+indexcomp$analysis_code<-dat$analysis_code[1]
+indexcomp$sort<-dat$sort_order[1]
+
+if (is.null(cor1)){
+indexcomp$BandCensuscor1<-"NA"
+indexcomp$sig1<-"NA"
+} else {
+indexcomp$BandCensuscor1<-cor1$estimate
+indexcomp$sig1<-cor1$p.value
+}
+
+if (is.null(cor2)){
+indexcomp$DETBCcor2<-"NA"
+indexcomp$sig2<-"NA"
+} else {
+indexcomp$DETBCcor2<-cor2$estimate
+indexcomp$sig2<-cor2$p.value
+}
+
+if(is.null(lm)){
+indexcomp$Censussig<-"NA"
+indexcomp$Bandingsig<-"NA"
+indexcomp$R2<-"NA"
+}else{
+indexcomp$Censussig<-coef(summary(lm))[3,4]
+indexcomp$Bandingsig<-coef(summary(lm))[2,4]
+indexcomp$R2<-summary(lm)$r.squared
+}
+
+#Print final error table to file
+write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
 
 
 } # end species loop
-  } # end season loop
+
+
+   } # end season loop
     } # end site loop
 
 ```
 
 
+```{r clean table}
+
+tab <- read_csv("output/ Annual Index Comparision.csv")
+tab <- tab %>% select(-SpeciesCode, - X15)
+
+tab <- tab %>% mutate(cor1sig = case_when(sig1<0.1 ~ "."), 
+                      sig1<0.05 ~ "*", 
+                      sig1<0.01 ~ "**", 
+                      sig1<0.001 ~ "***", 
+                      sig1>0.1 ~ "n.s.")
+
+tab <- tab %>% mutate(cor2sig = case_when(sig2<0.1 ~ "."),
+                      sig2<0.05 ~ "*", 
+                      sig2<0.01 ~ "**", 
+                      sig2<0.001 ~ "***", 
+                      sig2>0.1 ~ "n.s.")
+
+tab <- tab %>% mutate(Census = case_when(Censussig<0.1 ~ "."),
+                      Censussig<0.05 ~ "*", 
+                      Censussig<0.01 ~ "**", 
+                      Censussig<0.001 ~ "***", 
+                      Censussig>0.1 ~ "n.s.")
+
+tab <- tab %>% mutate(Band = case_when(Bandingsig<0.1 ~ "."),
+                      Bandingsig<0.05 ~ "*", 
+                      Bandingsig<0.01 ~ "**", 
+                      Bandingsig<0.001 ~ "***", 
+                      Bandingsig>0.1 ~ "n.s.")
+
+write.table(tab, file = paste(out.dir,"Annual Index Comparision_Sig.csv"), row.names = FALSE, col.name = TRUE, append = TRUE, quote = FALSE, sep = ",")
+
+```
 
 ##Table 3
 Reduced major axis regression 
