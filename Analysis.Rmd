@@ -18,9 +18,10 @@ out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison
 
 #create a table for results
 
-indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 17, byrow = FALSE, dimnames = NULL))
+#create new
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 21, byrow = FALSE, dimnames = NULL))
 
-names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "BCsig", "BCR2") 
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "Csig", "CR2", "Bsig", "BR2", "BCsig", "BCR2")
 
 write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision_June2021.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
 
@@ -35,10 +36,18 @@ index_dat<-merge(index_dat, sort, by.x="SpeciesCode", by.y="species_code")
 
 #Import response variable files
 fallres<-read.csv("sp.site.trends.fall.csv")
-fallres$season<-"Spring"
+fallres$season<-"Fall"
 springres<-read.csv("sp.site.trends.spring.csv")
-springres$season<-"Fall"
+springres$season<-"Spring"
 res<-rbind(fallres, springres)
+res<-res %>% select(-X)
+
+#Import trends file for comparison with res
+trend<-read.csv("trend_dat.csv")
+trend<-trend %>% select(SpeciesCode, site, season, analysis_code)
+trends<-distinct(trend)
+
+
 
 #Visual data check for outliers
 #plot(index_dat$year, index_dat$index)
@@ -110,9 +119,9 @@ try(lm3<-lm(DET~BC, data=dat), silent=TRUE)
 indexcomp<-NULL #clean old
 
 #create new
-indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 17, byrow = FALSE, dimnames = NULL))
+indexcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 21, byrow = FALSE, dimnames = NULL))
 
-names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "BCsig", "BCR2")
+names(indexcomp) <- c("site", "season", "SpeciesCode", "english_name", "scientific_name", "analysis_code", "sort", "BandCensuscor1", "sig1", "DETBCcor2", "sig2", "Censussig", "Bandingsig", "R2", "Csig", "CR2", "Bsig", "BR2", "BCsig", "BCR2")
 
 indexcomp$site<-site.list[m]
 indexcomp$season<-season.list[l]
@@ -144,27 +153,27 @@ indexcomp$Censussig<-"NA"
 indexcomp$Bandingsig<-"NA"
 indexcomp$R2<-"NA"
 }else{
-indexcomp$Censussig<-coef(summary(lm))[3,4]
-indexcomp$Bandingsig<-coef(summary(lm))[2,4]
-indexcomp$R2<-summary(lm)$r.squared
+try(indexcomp$Censussig<-coef(summary(lm))[3,4], silent=TRUE)
+try(indexcomp$Bandingsig<-coef(summary(lm))[2,4], silent=TRUE)
+try(indexcomp$R2<-summary(lm)$r.squared, silent = TRUE)
 }
 
 #lm2=DET~Band
 if(is.null(lm2)){
-indexcomp$Bandingsig<-"NA"
-indexcomp$R2<-"NA"
+indexcomp$Bsig<-"NA"
+indexcomp$BR2<-"NA"
 }else{
-try(indexcomp$Bandingsig<-coef(summary(lm2))[2,4], silent=TRUE)
-try(indexcomp$R2<-summary(lm2)$r.squared, silent=TRUE)
+try(indexcomp$Bsig<-coef(summary(lm2))[2,4], silent=TRUE)
+try(indexcomp$BR2<-summary(lm2)$r.squared, silent=TRUE)
 }
 
 #lm1 = DET~Census
 if(is.null(lm1)){
-indexcomp$Censussig<-"NA"
-indexcomp$R2<-"NA"
+indexcomp$Csig<-"NA"
+indexcomp$CR2<-"NA"
 }else{
-try(indexcomp$Censussig<-coef(summary(lm1))[2,4], silent=TRUE)
-try(indexcomp$R2<-summary(lm1)$r.squared, silent=TRUE)
+try(indexcomp$Csig<-coef(summary(lm1))[2,4], silent=TRUE)
+try(indexcomp$CR2<-summary(lm1)$r.squared, silent=TRUE)
 }
 
 
@@ -192,8 +201,8 @@ write.table(indexcomp, file = paste(out.dir,"Annual Index Comparision_June2021.c
 
 ```{r clean table}
 
-tab <- read_csv("output/ Annual Index Comparision.csv")
-tab <- tab %>% select(-SpeciesCode, - X15)
+tab <- read_csv("output/ Annual Index Comparision_June2021.csv")
+tab <- tab %>% select(-X21)
 
 tab <- tab %>% mutate(cor1sig = case_when(sig1<0.1 ~ "."), 
                       sig1<0.05 ~ "*", 
@@ -219,7 +228,29 @@ tab <- tab %>% mutate(Band = case_when(Bandingsig<0.1 ~ "."),
                       Bandingsig<0.001 ~ "***", 
                       Bandingsig>0.1 ~ "n.s.")
 
-write.table(tab, file = paste(out.dir,"Annual Index Comparision_Sig.csv"), row.names = FALSE, col.name = TRUE, append = TRUE, quote = FALSE, sep = ",")
+tab <- tab %>% mutate(BC = case_when(BCsig<0.1 ~ "."),
+                      BCsig<0.05 ~ "*", 
+                      BCsig<0.01 ~ "**", 
+                      BCsig<0.001 ~ "***", 
+                      BCsig>0.1 ~ "n.s.")
+
+tab <- tab %>% mutate(C = case_when(Csig<0.1 ~ "."),
+                      Csig<0.05 ~ "*", 
+                      Csig<0.01 ~ "**", 
+                      Csig<0.001 ~ "***", 
+                      Csig>0.1 ~ "n.s.")
+
+tab <- tab %>% mutate(B = case_when(Bsig<0.1 ~ "."),
+                      Bsig<0.05 ~ "*", 
+                      Bsig<0.01 ~ "**", 
+                      Bsig<0.001 ~ "***", 
+                      Bsig>0.1 ~ "n.s.")
+
+tab<-tab %>% select(site, season, SpeciesCode, english_name, scientific_name, analysis_code, sort, BandCensuscor1, cor1sig, DETBCcor2, cor2sig, Census, Band, R2, C, CR2, B, BR2, BC, BCR2)
+
+tab2<-merge(tab, res, by=c("SpeciesCode", "site", "season", "analysis_code"))
+
+write.table(tab2, file = paste(out.dir,"Annual Index Comparision_Sig.csv"), row.names = FALSE, col.name = TRUE, append = TRUE, quote = FALSE, sep = ",")
 
 ```
 
