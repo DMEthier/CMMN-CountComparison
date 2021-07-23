@@ -1,0 +1,449 @@
+---
+title: "TrendAnalysis"
+author: "Danielle Ethier"
+date: "01/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(reshape)
+library(car)
+
+```
+
+Following methods from Dunn et al. 2004
+
+##Table 3
+Comparsion of trends from BBS to various response varaibles from CMMN (Band, Census, BC, and DET)
+
+This will be done for each station/seaon seperatley only uing the past 10-years of data. M speices ONLY.
+
+
+Import the filtered BBS data and trend output form CMMN
+
+```{r import, include=FALSE}
+
+BBS<-read.csv("BBS.filter.csv")
+BBS<-BBS %>% select(Slope_Trend, species, Region)
+
+#Import desired trend data
+trend_dat<-read.csv("trend_dat.csv")
+trend<-trend_dat %>% filter(analysis_code=="M") %>% 
+  select(SpeciesCode, english_name, trnd, season, site, Response)
+
+#Import sort oder 
+sort<-read.csv("sp.names.csv")
+sort<-sort %>% select(species_code, sort_order)
+trend_dat<-merge(trend_dat, sort, by.x="SpeciesCode", by.y="species_code")
+
+#Join the data tables
+
+dat<-merge(trend_dat, BBS, by.x="english_name", by.y="species")
+
+```
+
+```{r analysis BBS loop}
+
+out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison/output/")
+
+#create new table
+trendBBScomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 9, byrow = FALSE, dimnames = NULL))
+
+names(trendBBScomp) <- c("site", "season", "region", "Model", "Slope", "SlopeSig", "Intercept", "InterceptSig", "R2")
+
+write.table(trendBBScomp, file = paste(out.dir,"Trend BBS Comparision_July2021_v3.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
+
+site.list<-unique(dat$site)
+season.list<-unique(dat$season)
+region.list<-unique(dat$Region)
+
+##LOOP THROUGH SITE, SEASON, and BBS Region (ON and QC)##
+
+#Create a site specific loop 
+for(m in 1:length(site.list)) {
+  
+#m<-1 #for testing
+    
+  site.data <-NULL 
+  site.data <- filter(dat, site == site.list[m]) %>%
+      droplevels()
+  
+
+#Create a season specific loop 
+for(l in 1:length(season.list)) {
+  
+#l<-1 #for testing
+    
+  season.data <-NULL 
+  season.data <- filter(site.data, season == season.list[l]) %>%
+      droplevels()
+
+#Create a BBS region specific loop 
+for(p in 1:length(region.list)) {
+
+#p<-1 #for testing
+    
+  region.data <-NULL 
+  region.data <- filter(season.data, Region == region.list[p]) %>%
+      droplevels()
+  
+#Create the site, season, region specific data frame for the analysis
+anal<-NULL
+anal<-cast(region.data,SpeciesCode+english_name+Slope_Trend~Response, value=c("trnd"))
+  
+##Start with the regression again the BBS Trends
+
+#Since we want to test the null hypothesis that the slope is different from 1:1 we can look to see if the CI of the slope overlap 1 or not. 
+
+#single regression between BBS~BandCensus
+lm1<-NULL
+try(lm1<-lm(Slope_Trend~BandCensus, data=anal), silent=TRUE)
+lm1a<-linearHypothesis(lm1, "BandCensus = 1")
+
+#single regression between BBS~Census  
+lm2<-NULL
+try(lm2<-lm(Slope_Trend~Census, data=anal), silent=TRUE)
+lm2a<-linearHypothesis(lm2, "Census = 1")
+
+#single regression between BBS~Band
+lm3<-NULL
+try(lm3<-lm(Slope_Trend~Band, data=anal), silent=TRUE)
+lm3a<-linearHypothesis(lm3, "Band = 1")
+
+#single regression between BBS~DET
+lm4<-NULL
+try(lm4<-lm(Slope_Trend~DET, data=anal), silent=TRUE)
+lm4a<-linearHypothesis(lm4, "DET = 1")
+
+#create new
+trendBBScomp<-NULL
+trendBBScomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 9, byrow = FALSE, dimnames = NULL))
+
+names(trendBBScomp) <- c("site", "season", "region", "Model", "Slope", "SlopeSig", "Intercept", "InterceptSig", "R2")
+
+trendBBScomp$site<-site.list[m]
+trendBBScomp$season<-season.list[l]
+trendBBScomp$region<-region.list[p]
+
+#lm1 BBS~BandCensus
+if(is.null(lm1)){
+trendBBScomp$Model<-"BBS~BandCensus"
+trendBBScomp$Slope<-"NA"
+trendBBScomp$SlopeSig<-"NA"
+trendBBScomp$Intercept<-"NA"
+trendBBScomp$InterceptSig<-"NA"
+trendBBScomp$R2<-"NA"
+}else{
+try(trendBBScomp$Model<-"BBS~BandCensus")
+try(trendBBScomp$Slope<-coef(summary(lm1))[2,1], silent=TRUE)
+try(trendBBScomp$SlopeSig<-lm1a[2,6], silent=TRUE)
+try(trendBBScomp$Intercept<-coef(summary(lm1))[1,1], silent=TRUE)
+try(trendBBScomp$InterceptSig<-coef(summary(lm1))[1,4], silent=TRUE)
+try(trendBBScomp$R2<-summary(lm1)$r.squared, silent = TRUE)
+}
+
+write.table(trendBBScomp, file = paste(out.dir,"Trend BBS Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm2 BBS~Census 
+if(is.null(lm2)){
+trendBBScomp$Model<-"BBS~Census"
+trendBBScomp$Slope<-"NA"
+trendBBScomp$SlopeSig<-"NA"
+trendBBScomp$Intercept<-"NA"
+trendBBScomp$InterceptSig<-"NA"
+trendBBScomp$R2<-"NA"
+}else{
+try(trendBBScomp$Model<-"BBS~Census")
+try(trendBBScomp$Slope<-coef(summary(lm2))[2,1], silent=TRUE)
+try(trendBBScomp$SlopeSig<-lm2a[2,6], silent=TRUE)
+try(trendBBScomp$Intercept<-coef(summary(lm2))[1,1], silent=TRUE)
+try(trendBBScomp$InterceptSig<-coef(summary(lm2))[1,4], silent=TRUE)
+try(trendBBScomp$R2<-summary(lm2)$r.squared, silent = TRUE)
+}
+
+write.table(trendBBScomp, file = paste(out.dir,"Trend BBS Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm3 BBS~Band
+if(is.null(lm3)){
+trendBBScomp$Model<-"BBS~Band"
+trendBBScomp$Slope<-"NA"
+trendBBScomp$SlopeSig<-"NA"
+trendBBScomp$Intercept<-"NA"
+trendBBScomp$InterceptSig<-"NA"
+trendBBScomp$R2<-"NA"
+}else{
+try(trendBBScomp$Model<-"BBS~Band")
+try(trendBBScomp$Slope<-coef(summary(lm3))[2,1], silent=TRUE)
+try(trendBBScomp$SlopeSig<-lm3a[2,6], silent=TRUE)
+try(trendBBScomp$Intercept<-coef(summary(lm3))[1,1], silent=TRUE)
+try(trendBBScomp$InterceptSig<-coef(summary(lm3))[1,4], silent=TRUE)
+try(trendBBScomp$R2<-summary(lm3)$r.squared, silent = TRUE)
+}
+
+write.table(trendBBScomp, file = paste(out.dir,"Trend BBS Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm4 BBS~DET
+if(is.null(lm4)){
+trendBBScomp$Model<-"BBS~DET"
+trendBBScomp$Slope<-"NA"
+trendBBScomp$SlopeSig<-"NA"
+trendBBScomp$Intercept<-"NA"
+trendBBScomp$InterceptSig<-"NA"
+trendBBScomp$R2<-"NA"
+}else{
+try(trendBBScomp$Model<-"BBS~DET")
+try(trendBBScomp$Slope<-coef(summary(lm4))[2,1], silent=TRUE)
+try(trendBBScomp$SlopeSig<-lm4a[2,6], silent=TRUE)
+try(trendBBScomp$Intercept<-coef(summary(lm4))[1,1], silent=TRUE)
+try(trendBBScomp$InterceptSig<-coef(summary(lm4))[1,4], silent=TRUE)
+try(trendBBScomp$R2<-summary(lm4)$r.squared, silent = TRUE)
+}
+
+#Print final error table to file
+write.table(trendBBScomp, file = paste(out.dir,"Trend BBS Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+
+
+
+} # end region loop
+  } # end season loop 
+    } # end site loop
+
+```
+
+#reimport that data before starting the second analysis
+
+```{r import, include=FALSE}
+
+#Import desired trend data
+trend_dat<-read.csv("trend_dat.csv")
+trend<-trend_dat %>% filter(analysis_code=="M") %>% 
+  select(SpeciesCode, english_name, trnd, season, site, Response)
+
+#Import sort oder 
+sort<-read.csv("sp.names.csv")
+sort<-sort %>% select(species_code, sort_order)
+trend_dat<-merge(trend_dat, sort, by.x="SpeciesCode", by.y="species_code")
+
+```
+
+```{r analysis loop}
+
+out.dir <- paste("C:/Users/dethier/Documents/ethier-scripts/CMMN-CountComparison/output/")
+
+#create new table
+trendcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 8, byrow = FALSE, dimnames = NULL))
+
+names(trendcomp) <- c("site", "season", "Model", "Slope", "SlopeSig", "Intercept", "InterceptSig", "R2")
+
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, append = FALSE, quote = FALSE, sep = ",")
+
+dat<-trend
+site.list<-unique(dat$site)
+season.list<-unique(dat$season)
+
+dat<-dat %>% distinct()
+
+##LOOP THROUGH SITE, SEASON##
+
+#Create a site specific loop 
+for(m in 1:length(site.list)) {
+  
+#m<-1 #for testing
+    
+  site.data <-NULL 
+  site.data <- filter(dat, site == site.list[m]) %>%
+      droplevels()
+  
+
+#Create a season specific loop 
+for(l in 1:length(season.list)) {
+  
+#l<-1 #for testing
+    
+  season.data <-NULL 
+  season.data <- filter(site.data, season == season.list[l]) %>%
+      droplevels()
+
+
+#Create the site, season, region specific data frame for the analysis
+anal<-NULL
+anal<-cast(season.data, SpeciesCode+english_name~Response, value=c("trnd"))
+  
+##Start with the regression again the BBS Trends
+
+
+#Since we want to test the null hypothesis that the slope is different from 1:1 we need to change the structure of the lm function to include an offset
+
+#fit = lm(y~1+x+offset(x))
+
+#single regression between DET~BandCensus
+lm1<-NULL
+try(lm1<-lm(DET~BandCensus, data=anal), silent=TRUE)
+lm1a<-linearHypothesis(lm1, "BandCensus = 1")
+
+#single regression between DET~Census  
+lm2<-NULL
+try(lm2<-lm(DET~Census, data=anal), silent=TRUE)
+lm12<-linearHypothesis(lm2, "Census = 1")
+
+#single regression between DET~Band
+lm3<-NULL
+try(lm3<-lm(DET~Band, data=anal), silent=TRUE)
+lm3a<-linearHypothesis(lm3, "Band = 1")
+
+#single regression between BC~Band
+lm4<-NULL
+try(lm4<-lm(BandCensus~Band, data=anal), silent=TRUE)
+lm4a<-linearHypothesis(lm4, "Band = 1")
+
+#single regression between BC~Census
+lm5<-NULL
+try(lm5<-lm(BandCensus~Census, data=anal), silent=TRUE)
+lm5a<-linearHypothesis(lm5, "Census = 1")
+
+#single regression between Band~Census
+lm6<-NULL
+try(lm6<-lm(Band~Census, data=anal), silent=TRUE)
+lm6a<-linearHypothesis(lm6, "Census = 1")
+
+#create new
+trendcomp<-NULL
+trendcomp<- as.data.frame(matrix(data = NA, nrow = 1, ncol = 8, byrow = FALSE, dimnames = NULL))
+
+names(trendcomp) <- c("site", "season", "Model", "Slope", "SlopeSig", "Intercept", "InterceptSig", "R2")
+
+trendcomp$site<-site.list[m]
+trendcomp$season<-season.list[l]
+
+#lm1 DET~BandCensus
+if(is.null(lm1)){
+trendcomp$Model<-"DET~BandCensus"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"DET~BandCensus")
+try(trendcomp$Slope<-coef(summary(lm1))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm1a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm1))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm1))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm1)$r.squared, silent = TRUE)
+}
+
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm2 DET~Census
+if(is.null(lm2)){
+trendcomp$Model<-"DET~Census"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"DET~Census")
+try(trendcomp$Slope<-coef(summary(lm2))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm2a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm2))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm2))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm2)$r.squared, silent = TRUE)
+}
+
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm3 DET~Band
+if(is.null(lm3)){
+trendcomp$Model<-"DET~Band"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"DET~Band")
+try(trendcomp$Slope<-coef(summary(lm3))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm3a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm3))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm3))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm3)$r.squared, silent = TRUE)
+}
+
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm4 BandCensus~Band
+if(is.null(lm4)){
+trendcomp$Model<-"BandCensus~Band"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"BandCensus~Band")
+try(trendcomp$Slope<-coef(summary(lm4))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm4a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm4))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm4))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm4)$r.squared, silent = TRUE)
+}
+
+#Print final error table to file
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm5 BC~Census
+if(is.null(lm5)){
+trendcomp$Model<-"BandCensus~Census"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"BandCensus~Census")
+try(trendcomp$Slope<-coef(summary(lm5))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm5a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm5))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm5))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm5)$r.squared, silent = TRUE)
+}
+
+#Print final error table to file
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+#lm6 Band~Census
+if(is.null(lm6)){
+trendcomp$Model<-"Band~Census"
+trendcomp$Slope<-"NA"
+trendcomp$SlopeSig<-"NA"
+trendcomp$Intercept<-"NA"
+trendcomp$InterceptSig<-"NA"
+trendcomp$R2<-"NA"
+}else{
+try(trendcomp$Model<-"Band~Census")
+try(trendcomp$Slope<-coef(summary(lm6))[2,1], silent=TRUE)
+try(trendcomp$SlopeSig<-lm6a[2,6], silent=TRUE)
+try(trendcomp$Intercept<-coef(summary(lm6))[1,1], silent=TRUE)
+try(trendcomp$InterceptSig<-coef(summary(lm6))[1,4], silent=TRUE)
+try(trendcomp$R2<-summary(lm5)$r.squared, silent = TRUE)
+}
+
+#Print final error table to file
+write.table(trendcomp, file = paste(out.dir,"Trend Comparision_July2021_v3.csv"), row.names = FALSE, col.name = FALSE, append = TRUE, quote = FALSE, sep = ",")
+
+
+
+
+  } # end season loop 
+    } # end site loop
+
+```

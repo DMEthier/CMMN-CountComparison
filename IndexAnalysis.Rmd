@@ -7,10 +7,12 @@ output: html_document
 
 Following methods from Dunn et al. 2004
 
-##Table 1
-To determine whether banding and census had independing effects of DET we preform a multiple regression. 
-DET annual index as response, and the census and banding index as the depenend variables
-This will be done for each station/seaon seperatley only uing the past 10-years of data
+##Table 3
+To determine whether banding and census had independing effects of DET we preform a multiple regression.
+
+DET annual index as response, and the census and banding index as the independed variables
+
+This will be done for each station/seaon seperatley only uing the past 10-years of data. 
 
 ```{r index regression}
 
