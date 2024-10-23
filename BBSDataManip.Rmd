@@ -35,5 +35,10 @@ Filter rows of interest
 
 BBS<-BBS %>% filter(Start_year>=2008 & End_year<=2018) %>% filter(Region_type %in% c("bcr", "prov_state"))
 
+BBS<-BBS %>% filter(Region =="ON"| Region== "QC")
+
+write.csv(BBS, "BBS.filter.csv")
+
+
 ```
 
